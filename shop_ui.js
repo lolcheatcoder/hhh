@@ -5,6 +5,7 @@
 const Component = Java.loadClass('net.minecraft.network.chat.Component')
 const ClickEvent = Java.loadClass('net.minecraft.network.chat.ClickEvent')
 const HoverEvent = Java.loadClass('net.minecraft.network.chat.HoverEvent')
+const Style = Java.loadClass('net.minecraft.network.chat.Style')
 
 const MONEY_OBJ = 'money'
 const MOB_KILL_REWARD = 10
@@ -252,12 +253,11 @@ function getMoney(player) {
 }
 
 function btn(label, cmd, hoverText) {
-  return Component.literal(label).withStyle(style =>
-    style
-      .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd))
-      .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
-      .withUnderlined(true)
-  )
+  const clickableStyle = Style.EMPTY
+    .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, cmd))
+    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal(hoverText)))
+    .withUnderlined(true)
+  return Component.literal(label).setStyle(clickableStyle)
 }
 
 function clampAmount(n) {
