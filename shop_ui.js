@@ -13,6 +13,7 @@ const BOSS_KILL_REWARD = 1000
 const PAGE_SIZE = 7
 const AH_PAGE_SIZE = 6
 const SHOP_TITLE = '§6§lServer Shop'
+const AUCTION_DATA_FILE = 'kubejs/data/shop_auction_data.json'
 
 const SHOP_SECTIONS = {
   food: {
@@ -179,6 +180,64 @@ Object.entries(SHOP_SECTIONS).forEach(([section, sectionData]) => {
 let NEXT_AUCTION_ID = 1
 const AUCTIONS = []
 const PENDING_PAYOUTS = {}
+
+function resetAuctionRuntime() {
+  NEXT_AUCTION_ID = 1
+  AUCTIONS.length = 0
+  Object.keys(PENDING_PAYOUTS).forEach(key => delete PENDING_PAYOUTS[key])
+}
+
+function saveAuctionData() {
+  const payload = {
+    nextAuctionId: NEXT_AUCTION_ID,
+    auctions: AUCTIONS,
+    pendingPayouts: PENDING_PAYOUTS
+  }
+
+  try {
+    JsonIO.write(AUCTION_DATA_FILE, payload)
+  } catch (err) {
+    console.error(`[shop_ui] Failed to save auction data: ${err}`)
+  }
+}
+
+function loadAuctionData() {
+  resetAuctionRuntime()
+
+  try {
+    const raw = JsonIO.read(AUCTION_DATA_FILE)
+    if (!raw) return
+
+    const nextId = Number(raw.nextAuctionId || 1)
+    NEXT_AUCTION_ID = nextId > 1 ? Math.floor(nextId) : 1
+
+    if (Array.isArray(raw.auctions)) {
+      raw.auctions.forEach(a => {
+        if (!a || !a.id || !a.itemId || !a.amount || !a.price || !a.sellerId) return
+        AUCTIONS.push({
+          id: Math.floor(Number(a.id)),
+          sellerId: `${a.sellerId}`,
+          sellerName: `${a.sellerName || 'Unknown'}`,
+          itemId: `${a.itemId}`,
+          amount: clampAmount(Number(a.amount)),
+          price: clampPrice(Number(a.price)),
+          createdAt: Number(a.createdAt || Date.now())
+        })
+      })
+    }
+
+    const payouts = raw.pendingPayouts || {}
+    Object.entries(payouts).forEach(([pid, amount]) => {
+      const n = Math.floor(Number(amount || 0))
+      if (n > 0) PENDING_PAYOUTS[`${pid}`] = n
+    })
+
+    const maxId = AUCTIONS.reduce((max, a) => Math.max(max, a.id), 0)
+    if (NEXT_AUCTION_ID <= maxId) NEXT_AUCTION_ID = maxId + 1
+  } catch (err) {
+    console.error(`[shop_ui] Failed to load auction data: ${err}`)
+  }
+}
 
 function playerId(player) {
   return `${player.uuid}`
@@ -471,6 +530,7 @@ function createAuction(player, itemId, amount, price) {
   }
 
   AUCTIONS.push(listing)
+  saveAuctionData()
   player.tell(`§aAuction created! §7#${listing.id} §f${amount}x ${itemId} §7for §e${price} money`)
 }
 
@@ -495,6 +555,7 @@ function buyAuction(player, listingId) {
   const index = AUCTIONS.findIndex(a => a.id === listing.id)
   if (index >= 0) AUCTIONS.splice(index, 1)
 
+  saveAuctionData()
   player.tell(`§aPurchased auction #${listing.id}: §f${listing.amount}x ${listing.itemId} §7for §e${listing.price}`)
 }
 
@@ -511,6 +572,7 @@ function cancelAuction(player, listingId) {
   const index = AUCTIONS.findIndex(a => a.id === listing.id)
   if (index >= 0) AUCTIONS.splice(index, 1)
 
+  saveAuctionData()
   player.tell(`§eCancelled auction #${listing.id} and returned §f${listing.amount}x ${listing.itemId}`)
 }
 
@@ -537,6 +599,7 @@ function collectPendingPayout(player) {
   if (payout <= 0) return
 
   delete PENDING_PAYOUTS[id]
+  saveAuctionData()
   player.addScore(MONEY_OBJ, payout)
   player.tell(`§6Auction payout received: §e${payout} money§7. New balance: §e${getMoney(player)}`)
 }
@@ -551,6 +614,7 @@ function isBossEntity(entity) {
 
 ServerEvents.loaded(event => {
   event.server.runCommandSilent(`scoreboard objectives add ${MONEY_OBJ} dummy`)
+  loadAuctionData()
 })
 
 PlayerEvents.loggedIn(event => {
