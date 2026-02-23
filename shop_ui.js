@@ -249,10 +249,36 @@ function ensureMoneyObjective(server) {
   server.runCommandSilent(`scoreboard objectives add ${MONEY_OBJ} dummy`)
 }
 
+function scoreboardName(player) {
+  const raw = `${player.username || player.name.string || ''}`
+  return `"${raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+function addMoney(player, amount) {
+  amount = amount | 0
+  if (!player || !amount) return
+
+  const server = player.server
+  ensureMoneyObjective(server)
+  const target = scoreboardName(player)
+  server.runCommandSilent(`scoreboard players add ${target} ${MONEY_OBJ} 0`)
+
+  if (amount > 0) {
+    server.runCommandSilent(`scoreboard players add ${target} ${MONEY_OBJ} ${amount}`)
+  } else {
+    server.runCommandSilent(`scoreboard players remove ${target} ${MONEY_OBJ} ${Math.abs(amount)}`)
+  }
+}
+
 function getMoney(player) {
   try {
-    const score = player.score(MONEY_OBJ)
-    return score == null ? 0 : score
+    const server = player.server
+    ensureMoneyObjective(server)
+    const target = scoreboardName(player)
+    server.runCommandSilent(`scoreboard players add ${target} ${MONEY_OBJ} 0`)
+    const score = server.runCommandSilent(`scoreboard players get ${target} ${MONEY_OBJ}`)
+    const parsed = Number(score)
+    return isNaN(parsed) ? 0 : parsed
   } catch (err) {
     ensureMoneyObjective(player ? player.server : null)
     return 0
@@ -488,7 +514,7 @@ function buy(player, key, amount) {
   }
 
   player.give(Item.of(entry.id, amount))
-  player.addScore(MONEY_OBJ, -cost)
+  addMoney(player, -cost)
   player.tell(`§aBought §f${amount}x ${key}§a for §e${cost}`)
 }
 
@@ -503,7 +529,7 @@ function sell(player, key, amount) {
     return player.tell(`§cYou don't have §f${amount}x ${key}§c.`)
   }
 
-  player.addScore(MONEY_OBJ, payout)
+  addMoney(player, payout)
   player.tell(`§aSold §f${amount}x ${key}§a for §e${payout}`)
 }
 
@@ -588,7 +614,7 @@ function buyAuction(player, listingId) {
     return player.tell(`§cNot enough money. Need §e${listing.price}§c.`)
   }
 
-  player.addScore(MONEY_OBJ, -listing.price)
+  addMoney(player, -listing.price)
   const boughtStack = listing.itemNbt
     ? Item.of(`${listing.amount}x ${listing.itemId}${listing.itemNbt}`)
     : Item.of(listing.itemId, listing.amount)
@@ -647,7 +673,7 @@ function collectPendingPayout(player) {
 
   delete PENDING_PAYOUTS[id]
   saveAuctionData()
-  player.addScore(MONEY_OBJ, payout)
+  addMoney(player, payout)
   player.tell(`§6Auction payout received: §e${payout} money§7. New balance: §e${getMoney(player)}`)
 }
 
@@ -877,6 +903,6 @@ EntityEvents.death(event => {
   const killed = event.entity
   const reward = isBossEntity(killed) ? BOSS_KILL_REWARD : MOB_KILL_REWARD
 
-  player.addScore(MONEY_OBJ, reward)
+  addMoney(player, reward)
   player.tell(`§6+${reward} money for kill! §7Balance: §e${getMoney(player)}`)
 })
