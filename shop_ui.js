@@ -305,11 +305,11 @@ function shopStats(items) {
   const mostExpensive = values.reduce((max, v) => Math.max(max, v.buy), values[0].buy)
 
   return {
-    count,
+    count: count,
     avgBuy: Math.floor(totalBuy / count),
     avgSell: Math.floor(totalSell / count),
-    cheapest,
-    mostExpensive
+    cheapest: cheapest,
+    mostExpensive: mostExpensive
   }
 }
 
@@ -460,7 +460,7 @@ function listMainHandAuction(player, price) {
     itemId: `${held.id}`,
     amount: clampAmount(Number(held.count || 1)),
     itemNbt: held.nbt ? `${held.nbt}` : null,
-    price,
+    price: price,
     createdAt: Date.now()
   }
 
@@ -560,10 +560,10 @@ function createAuction(player, itemId, amount, price) {
     id: NEXT_AUCTION_ID++,
     sellerId: playerId(player),
     sellerName: player.name.string,
-    itemId,
-    amount,
+    itemId: itemId,
+    amount: amount,
     itemNbt: null,
-    price,
+    price: price,
     createdAt: Date.now()
   }
 
