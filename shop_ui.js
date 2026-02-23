@@ -172,7 +172,7 @@ const SECTION_ORDER = [
 const SHOP = {}
 Object.entries(SHOP_SECTIONS).forEach(([section, sectionData]) => {
   Object.entries(sectionData.items).forEach(([key, item]) => {
-    SHOP[key] = { ...item, section }
+    SHOP[key] = Object.assign({}, item, { section })
   })
 })
 
@@ -509,7 +509,7 @@ function myAuctionCount(player) {
 }
 
 function showAuctionHouse(player, page) {
-  const sorted = [...AUCTIONS].sort((a, b) => a.id - b.id)
+  const sorted = AUCTIONS.slice().sort((a, b) => a.id - b.id)
   const paged = paginateEntries(sorted, page, AH_PAGE_SIZE)
 
   player.tell(Component.literal('§6§lAuction House'))
