@@ -220,6 +220,7 @@ function loadAuctionData() {
           sellerName: `${a.sellerName || 'Unknown'}`,
           itemId: `${a.itemId}`,
           amount: clampAmount(Number(a.amount)),
+          itemNbt: a.itemNbt ? `${a.itemNbt}` : null,
           price: clampPrice(Number(a.price)),
           createdAt: Number(a.createdAt || Date.now())
         })
@@ -436,6 +437,33 @@ function removeItemsOrFail(player, itemId, amount) {
   return true
 }
 
+function listMainHandAuction(player, price) {
+  price = clampPrice(price)
+  const held = player.mainHandItem
+  if (!held || held.empty) {
+    return player.tell('§cHold an item in your main hand to list it.')
+  }
+
+  const listing = {
+    id: NEXT_AUCTION_ID++,
+    sellerId: playerId(player),
+    sellerName: player.name.string,
+    itemId: `${held.id}`,
+    amount: clampAmount(Number(held.count || 1)),
+    itemNbt: held.nbt ? `${held.nbt}` : null,
+    price,
+    createdAt: Date.now()
+  }
+
+  if (!removeItemsOrFail(player, listing.itemId, listing.amount)) {
+    return player.tell(`§cYou no longer have §f${listing.amount}x ${listing.itemId}§c in your inventory.`)
+  }
+
+  AUCTIONS.push(listing)
+  saveAuctionData()
+  player.tell(`§aAuction created from hand! §7#${listing.id} §f${listing.amount}x ${listing.itemId} §7for §e${price} money`)
+}
+
 function buy(player, key, amount) {
   const entry = SHOP[key]
   if (!entry) return player.tell(`§cUnknown item key: §f${key}`)
@@ -492,7 +520,7 @@ function showAuctionHouse(player, page) {
   } else {
     paged.entries.forEach(listing => {
       const line = Component.literal(
-        `• #${listing.id} §f${listing.amount}x ${listing.itemId} §7Price: §e${listing.price} §8Seller: §7${listing.sellerName} `
+        `• #${listing.id} §f${listing.amount}x ${listing.itemId}${listing.itemNbt ? ' §d*NBT' : ''} §7Price: §e${listing.price} §8Seller: §7${listing.sellerName} `
       )
       line.append(btn('§a[Buy]', `/ah buy ${listing.id}`, `Buy listing #${listing.id}`))
       if (listing.sellerId === playerId(player)) {
@@ -508,7 +536,7 @@ function showAuctionHouse(player, page) {
     nextCmd: paged.page < paged.totalPages ? `/ah ${paged.page + 1}` : null,
     refreshCmd: `/ah ${paged.page}`
   })
-  player.tell(Component.literal('§8Commands: §7/ah sell <item_id> <amount> <price>, /ah buy <id>, /ah my, /ah cancel <id>'))
+  player.tell(Component.literal('§8Commands: §7/ah sell <item_id> <amount> <price>, /ah sellhand <price>, /ah buy <id>, /ah my, /ah cancel <id>'))
 }
 
 function createAuction(player, itemId, amount, price) {
@@ -525,6 +553,7 @@ function createAuction(player, itemId, amount, price) {
     sellerName: player.name.string,
     itemId,
     amount,
+    itemNbt: null,
     price,
     createdAt: Date.now()
   }
@@ -548,7 +577,10 @@ function buyAuction(player, listingId) {
   }
 
   player.addScore(MONEY_OBJ, -listing.price)
-  player.give(Item.of(listing.itemId, listing.amount))
+  const boughtStack = listing.itemNbt
+    ? Item.of(`${listing.amount}x ${listing.itemId}${listing.itemNbt}`)
+    : Item.of(listing.itemId, listing.amount)
+  player.give(boughtStack)
 
   PENDING_PAYOUTS[listing.sellerId] = (PENDING_PAYOUTS[listing.sellerId] || 0) + listing.price
 
@@ -568,7 +600,10 @@ function cancelAuction(player, listingId) {
     return player.tell('§cYou can only cancel your own listings.')
   }
 
-  player.give(Item.of(listing.itemId, listing.amount))
+  const boughtStack = listing.itemNbt
+    ? Item.of(`${listing.amount}x ${listing.itemId}${listing.itemNbt}`)
+    : Item.of(listing.itemId, listing.amount)
+  player.give(boughtStack)
   const index = AUCTIONS.findIndex(a => a.id === listing.id)
   if (index >= 0) AUCTIONS.splice(index, 1)
 
@@ -733,6 +768,17 @@ ServerEvents.commandRegistry(event => {
           )
         )
       )
+      .then(Commands.literal('sellhand')
+        .then(Commands.argument('price', Arguments.INTEGER.create(event))
+          .executes(ctx => {
+            const p = ctx.source.player
+            if (!p) return 0
+            listMainHandAuction(p, Arguments.INTEGER.getResult(ctx, 'price'))
+            return 1
+          })
+        )
+      )
+
       .then(Commands.literal('buy')
         .then(Commands.argument('id', Arguments.INTEGER.create(event))
           .executes(ctx => {
