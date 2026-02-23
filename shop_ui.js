@@ -170,9 +170,11 @@ const SECTION_ORDER = [
 ]
 
 const SHOP = {}
-Object.entries(SHOP_SECTIONS).forEach(([section, sectionData]) => {
-  Object.entries(sectionData.items).forEach(([key, item]) => {
-    SHOP[key] = Object.assign({}, item, { section })
+Object.keys(SHOP_SECTIONS).forEach(section => {
+  const sectionData = SHOP_SECTIONS[section]
+  Object.keys(sectionData.items).forEach(key => {
+    const item = sectionData.items[key]
+    SHOP[key] = Object.assign({}, item, { section: section })
   })
 })
 
@@ -228,8 +230,8 @@ function loadAuctionData() {
     }
 
     const payouts = raw.pendingPayouts || {}
-    Object.entries(payouts).forEach(([pid, amount]) => {
-      const n = Math.floor(Number(amount || 0))
+    Object.keys(payouts).forEach(pid => {
+      const n = Math.floor(Number(payouts[pid] || 0))
       if (n > 0) PENDING_PAYOUTS[`${pid}`] = n
     })
 
@@ -245,7 +247,8 @@ function playerId(player) {
 }
 
 function getMoney(player) {
-  return player.score(MONEY_OBJ) ?? 0
+  const score = player.score(MONEY_OBJ)
+  return score == null ? 0 : score
 }
 
 function btn(label, cmd, hoverText) {
@@ -292,7 +295,7 @@ function paginateEntries(entries, page, pageSize) {
 }
 
 function shopStats(items) {
-  const values = Object.values(items)
+  const values = Object.keys(items).map(key => items[key])
   const count = values.length
   if (!count) return { count: 0, avgBuy: 0, avgSell: 0, cheapest: 0, mostExpensive: 0 }
 
@@ -342,16 +345,19 @@ function tellNavigation(player, nav) {
 }
 
 function showShopHome(player, page) {
-  const orderedSections = SECTION_ORDER
-    .filter(key => SHOP_SECTIONS[key])
-    .map(key => [key, SHOP_SECTIONS[key]])
+  const orderedSections = []
+  SECTION_ORDER.forEach(key => {
+    if (SHOP_SECTIONS[key]) orderedSections.push([key, SHOP_SECTIONS[key]])
+  })
 
   const paged = paginateEntries(orderedSections, page, PAGE_SIZE)
   player.tell(Component.literal(`${SHOP_TITLE} §7(organized by section)`))
   player.tell(Component.literal(`§7Balance: §e${getMoney(player)} money`))
   player.tell(Component.literal(`§7Sections page §f${paged.page}§7/§f${paged.totalPages}`))
 
-  paged.entries.forEach(([sectionKey, section]) => {
+  paged.entries.forEach(entry => {
+    const sectionKey = entry[0]
+    const section = entry[1]
     const stats = shopStats(section.items)
     player.tell(
       Component.literal('• ')
@@ -378,14 +384,15 @@ function showShopSection(player, sectionKey, page) {
     return showShopHome(player, 1)
   }
 
-  const paged = paginateEntries(Object.entries(section.items), page, PAGE_SIZE)
+  const sectionItems = Object.keys(section.items).map(key => [key, section.items[key]])
+  const paged = paginateEntries(sectionItems, page, PAGE_SIZE)
   const stats = shopStats(section.items)
 
   player.tell(Component.literal(`${section.title} §7(Page §f${paged.page}§7/§f${paged.totalPages}§7)`))
   player.tell(Component.literal(`§7Balance: §e${getMoney(player)} money`))
   player.tell(Component.literal(`§7Items: §f${stats.count} §7| Avg Buy: §f${stats.avgBuy} §7| Cheapest: §f${stats.cheapest} §7| Highest: §f${stats.mostExpensive}`))
 
-  paged.entries.forEach(([key, data]) => player.tell(lineFor(key, data)))
+  paged.entries.forEach(entry => player.tell(lineFor(entry[0], entry[1])))
 
   tellNavigation(player, {
     backCmd: '/shop 1',
@@ -400,8 +407,8 @@ function showSearchResults(player, searchTerm, page) {
   const query = `${searchTerm || ''}`.trim().toLowerCase()
   if (!query) return player.tell(Component.literal('§cSearch term cannot be empty.'))
 
-  const matches = Object.entries(SHOP).filter(([key, entry]) =>
-    key.includes(query) || entry.id.includes(query) || entry.section.includes(query)
+  const matches = Object.keys(SHOP).map(key => [key, SHOP[key]]).filter(entry =>
+    entry[0].includes(query) || entry[1].id.includes(query) || entry[1].section.includes(query)
   )
 
   const paged = paginateEntries(matches, page, PAGE_SIZE)
@@ -413,7 +420,9 @@ function showSearchResults(player, searchTerm, page) {
     return tellNavigation(player, { homeCmd: '/shop 1', refreshCmd: `/shop search ${query} 1` })
   }
 
-  paged.entries.forEach(([key, data]) => {
+  paged.entries.forEach(entry => {
+    const key = entry[0]
+    const data = entry[1]
     const sectionTag = Component.literal(`§8[${data.section}] `)
     player.tell(sectionTag.append(lineFor(key, data)))
   })
