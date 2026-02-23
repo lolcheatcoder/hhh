@@ -244,9 +244,19 @@ function playerId(player) {
   return `${player.uuid}`
 }
 
+function ensureMoneyObjective(server) {
+  if (!server) return
+  server.runCommandSilent(`scoreboard objectives add ${MONEY_OBJ} dummy`)
+}
+
 function getMoney(player) {
-  const score = player.score(MONEY_OBJ)
-  return score == null ? 0 : score
+  try {
+    const score = player.score(MONEY_OBJ)
+    return score == null ? 0 : score
+  } catch (err) {
+    ensureMoneyObjective(player ? player.server : null)
+    return 0
+  }
 }
 
 function btn(label, cmd, hoverText) {
@@ -650,7 +660,7 @@ function isBossEntity(entity) {
 }
 
 ServerEvents.loaded(event => {
-  event.server.runCommandSilent(`scoreboard objectives add ${MONEY_OBJ} dummy`)
+  ensureMoneyObjective(event.server)
   loadAuctionData()
 })
 
